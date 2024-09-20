@@ -1,9 +1,5 @@
-mod alph;
-mod key;
+extern crate burro;
 
-fn main() {
-    let alphabet = alph::Alphabet::new(33, 1072);
-    let key = key::Key::gen(&alphabet);
-
-    println!("{}", key.to_string(&alphabet));
+fn main() -> Result<(), std::io::Error> {
+    Ok(())
 }
