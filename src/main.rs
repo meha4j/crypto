@@ -1,18 +1,18 @@
 extern crate burro;
 
-use burro::codec::CharReader;
+use burro::key::*;
+use burro::utf8::*;
+
+use std::fs::File;
 
 fn main() {
-    //    for i in 0..33u32 {
-    //        println!(
-    //            "{}: {}, {}",
-    //            1072 + i,
-    //            char::from_u32(1072 + i).unwrap(),
-    //            char::from_u32(1072 + i - 32).unwrap()
-    //        );
-    //    }
-    //
-    let f = CharReader::open("in").unwrap();
+    let key = Key::get(File::open("ru.key").unwrap(), 33, 1072);
+    let inp = Reader::open(File::open("in.burro").unwrap());
+    let mut out = Writer::create(File::create("in.burro.burro").unwrap());
 
-    f.for_each(|u| println!("{}: {}", u, char::from_u32(u).unwrap()));
+    inp
+        .filter(|u| *u >= 1072)
+        .map(|u| u - 1072)
+        .map(|off| key.at(off) as u32 + 1072)
+        .for_each(|u| out.write(u).unwrap());
 }
