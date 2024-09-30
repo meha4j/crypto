@@ -1,13 +1,17 @@
 #include <errno.h>
-#include <math.h>
+#include <float.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/random.h>
 #include <unitypes.h>
 
+#include "key.h"
+
 #define N 33
 #define ORG 1072
+#define POP 100
 
 double trg[N];
 
@@ -90,6 +94,97 @@ int crk_cross(uint8_t a[N], uint8_t b[N], uint8_t c[N]) {
 
     f |= (1 << (N - 1 - c[i]));
   }
+
+  return 0;
+}
+
+static inline void swap(double* fit, uint8_t** pop, size_t a, size_t b) {
+  if (a == b)
+    return;
+
+  double ftmp = fit[a];
+  uint8_t* ptmp = pop[a];
+
+  fit[a] = fit[b];
+  fit[b] = ftmp;
+
+  pop[a] = pop[b];
+  pop[b] = ptmp;
+}
+
+int crk_slct(size_t ps, double fit[ps], uint8_t* pop[ps], size_t n) {
+  if (n > ps) {
+    errno = EINVAL;
+    return -1;
+  }
+
+  for (size_t i = 0; i < n; ++i) {
+    double min = DBL_MAX;
+    size_t imin = SIZE_MAX;
+
+    for (size_t j = i; j < n; ++j)
+      if (fit[j] < min) {
+        imin = j;
+        min = fit[j];
+      }
+
+    swap(fit, pop, i, imin);
+  }
+
+  return 0;
+}
+
+uint8_t** pop_new(size_t ps) {
+  uint8_t** pop = malloc(sizeof(uint8_t*) * ps);
+
+  for (size_t i = 0; i < ps; ++i)
+    pop[i] = malloc(N);
+
+  return pop;
+}
+
+void pop_est(size_t ps, uint8_t* pop[ps], double rate[ps], double frq[N]) {
+  for (size_t i = 0; i < ps; ++i)
+    crk_fit(pop[i], frq, &rate[i]);
+}
+
+void pop_free(size_t ps, uint8_t* pop[ps]) {
+  for (size_t i = 0; i < ps; ++i)
+    free(pop[i]);
+
+  free(pop);
+}
+
+int crk_run(size_t r, size_t s, ucs4_t raw[s]) {
+  crk_init();
+
+  double* frq = malloc(sizeof(double) * s);
+  double rate[POP];
+
+  crk_est(s, raw, frq);
+
+  uint8_t** pop = pop_new(POP);
+
+  for (size_t i = 0; i < POP; ++i)
+    key_gen(pop[i], N);
+
+  for (int i = 0; i < r; ++i) {
+    pop_est(POP, pop, rate, frq);
+    crk_slct(POP, rate, pop, 14);
+
+    uint8_t** npop = pop_new(POP);
+
+    size_t s = 0;
+
+    for (int j = 0; j < 13 && s < POP; ++j)
+      for (int k = j + 1; k < 14 && s < POP; ++k)
+        crk_cross(pop[j], pop[k], npop[s++]);
+
+    pop_free(POP, pop);
+    pop = npop;
+  }
+
+  free(frq);
 
   return 0;
 }
