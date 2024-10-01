@@ -7,57 +7,51 @@
 #include <sys/random.h>
 #include <unitypes.h>
 
+#include "crk.h"
 #include "key.h"
 
-#define N 33
-#define ORG 1072
-#define POP 100
+double seed[N];
 
-double trg[N];
-
-int crk_init() {
-  FILE* f = fopen("target.data", "r");
-
+int crk_seed(FILE* f) {
   if (!f) {
     errno = ENOENT;
     return -1;
   }
 
   for (int i = 0; i < N; ++i)
-    if (fscanf(f, "%lf", &trg[i]) != 1) {
+    if (fscanf(f, "%lf", &seed[i]) != 1) {
       fclose(f);
       errno = EIO;
       return -1;
     }
 
-  fclose(f);
   return 0;
 }
 
-int crk_est(size_t s, ucs4_t raw[s], double frq[N]) {
-  memset(frq, 0, N * sizeof(double));
+static int crk_est(size_t ds, ucs4_t data[ds], double est[N]) {
+  memset(est, 0, N * sizeof(double));
 
-  for (int i = 0; i < s; ++i)
-    frq[raw[i] - ORG] += 1;
+  for (int i = 0; i < ds; ++i)
+    est[data[i] - A] += 1;
 
   for (int i = 0; i < N; ++i)
-    frq[i] /= (double)s;
+    est[i] /= (double)ds;
 
   return 0;
 }
 
-int crk_fit(uint8_t key[N], double frq[N], double* rate) {
+static int crk_fit(uint8_t key[N], double est[N], double* rate) {
   *rate = 0;
 
   for (int i = 0; i < N; ++i) {
-    double diff = trg[i] - frq[key[i]];
+    double diff = seed[i] - est[key[i]];
     *rate += diff * diff;
   }
 
   return 0;
 }
 
-int crk_mut(uint8_t key[N]) {
+static int crk_mut(uint8_t key[N]) {
   uint8_t rnd[2];
 
   if (getrandom(rnd, 2, 0) == -1) {
@@ -75,7 +69,7 @@ int crk_mut(uint8_t key[N]) {
   return 0;
 }
 
-int crk_cross(uint8_t a[N], uint8_t b[N], uint8_t c[N]) {
+static int crk_cross(uint8_t a[N], uint8_t b[N], uint8_t c[N]) {
   uint8_t f = 0;
   uint8_t rnd[N];
 
@@ -112,17 +106,17 @@ static inline void swap(double* fit, uint8_t** pop, size_t a, size_t b) {
   pop[b] = ptmp;
 }
 
-int crk_slct(size_t ps, double fit[ps], uint8_t* pop[ps], size_t n) {
-  if (n > ps) {
+static int crk_slct(size_t ss, size_t ps, double fit[ps], uint8_t* pop[ps]) {
+  if (ss > ps) {
     errno = EINVAL;
     return -1;
   }
 
-  for (size_t i = 0; i < n; ++i) {
+  for (size_t i = 0; i < ss; ++i) {
     double min = DBL_MAX;
     size_t imin = SIZE_MAX;
 
-    for (size_t j = i; j < n; ++j)
+    for (size_t j = i; j < ss; ++j)
       if (fit[j] < min) {
         imin = j;
         min = fit[j];
@@ -134,7 +128,7 @@ int crk_slct(size_t ps, double fit[ps], uint8_t* pop[ps], size_t n) {
   return 0;
 }
 
-uint8_t** pop_new(size_t ps) {
+static uint8_t** pop_new(size_t ps) {
   uint8_t** pop = malloc(sizeof(uint8_t*) * ps);
 
   for (size_t i = 0; i < ps; ++i)
@@ -143,48 +137,52 @@ uint8_t** pop_new(size_t ps) {
   return pop;
 }
 
-void pop_est(size_t ps, uint8_t* pop[ps], double rate[ps], double frq[N]) {
+static void pop_fit(double est[N], size_t ps, uint8_t* pop[ps],
+                    double fit[ps]) {
   for (size_t i = 0; i < ps; ++i)
-    crk_fit(pop[i], frq, &rate[i]);
+    crk_fit(pop[i], est, &fit[i]);
 }
 
-void pop_free(size_t ps, uint8_t* pop[ps]) {
+static void pop_free(size_t ps, uint8_t* pop[ps]) {
   for (size_t i = 0; i < ps; ++i)
     free(pop[i]);
 
   free(pop);
 }
 
-int crk_run(size_t r, size_t s, ucs4_t raw[s]) {
-  crk_init();
+int crk(size_t sgen, size_t spop, size_t ds, ucs4_t data[ds]) {
+  double est[N];
 
-  double* frq = malloc(sizeof(double) * s);
-  double rate[POP];
+  double* fit = malloc(sizeof(double) * spop);
+  uint8_t** pop;
 
-  crk_est(s, raw, frq);
+  crk_est(ds, data, est);
 
-  uint8_t** pop = pop_new(POP);
+  pop = pop_new(spop);
 
-  for (size_t i = 0; i < POP; ++i)
-    key_gen(pop[i], N);
+  for (size_t i = 0; i < spop; ++i)
+    key_gen(pop[i]);
 
-  for (int i = 0; i < r; ++i) {
-    pop_est(POP, pop, rate, frq);
-    crk_slct(POP, rate, pop, 14);
+  for (int i = 0; i < sgen; ++i) {
+    pop_fit(est, spop, pop, fit);
+    crk_slct(spop / 2, spop, fit, pop);
 
-    uint8_t** npop = pop_new(POP);
+    uint8_t** npop = pop_new(spop);
 
-    size_t s = 0;
+    for (int j = 0, s = 0; j < spop - 1 && s < spop; ++j)
+      for (int k = j + 1; k < spop && s < spop; ++k)
+        crk_cross(pop[j], pop[k], npop[s]);
 
-    for (int j = 0; j < 13 && s < POP; ++j)
-      for (int k = j + 1; k < 14 && s < POP; ++k)
-        crk_cross(pop[j], pop[k], npop[s++]);
-
-    pop_free(POP, pop);
+    pop_free(spop, pop);
     pop = npop;
   }
 
-  free(frq);
+  pop_free(spop, pop);
+  free(fit);
 
+  return 0;
+}
+
+int crk_exe(int argc, char** argv) {
   return 0;
 }

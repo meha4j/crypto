@@ -1,56 +1,63 @@
-#include <errno.h>
-#include <locale.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unitypes.h>
+// burro key KEYFILE
 
+// burro enc KEYFILE
+//  OPTIONS:
+//    -in     Input file, default: stdin.
+//    -out    Output file, default: stdout.
+
+// burro dec [OPTIONS] KEYFILE
+//  OPTIONS:
+//    -in     Input file, default: stdin.
+//    -out    Output file, default: stdout.
+
+// burro crk [OPTIONS]
+//  OPTIONS:
+//    -v      Verbose.
+//    -in     Input file, default: stdin.
+//    -out    Output file, default: stdout.
+
+#include <errno.h>
+#include <string.h>
+
+#include "crk.h"
 #include "enc.h"
 #include "key.h"
-#include "u8.h"
 
-#define N 33
+int help() {
+  printf("Usage: burro COMMAND\n\n");
+  printf("COMMAND\tCommand to execute.\n\n");
+  printf("Available commands:\n");
+  printf("\tkey\tKey management.\n");
+  printf("\tenc\tEncode text using private key.\n");
+  printf("\tdec\tDecode text using private key.\n");
+  printf("\tcrk\tDecode text without private key.\n");
+
+  return 0;
+}
 
 int main(int argc, char* argv[]) {
-  setlocale(LC_CTYPE, "en_US.UTF-8");
+  if (argc < 2 || !strcmp(argv[1], "help"))
+    return help();
 
-  FILE* f = fopen("ru.key", "r");
-  uint8_t key[N];
+  int r;
 
-  if (key_get(f, key, N, 1)) {
-    printf("[key_get] fatal: %s.", strerror(errno));
-    fclose(f);
-    return -1;
+  if (!strcmp(argv[1], "key"))
+    r = key_exe(argc, argv);
+  else if (!strcmp(argv[1], "enc"))
+    r = enc_exe(argc, argv);
+  else if (!strcmp(argv[1], "dec"))
+    r = dec_exe(argc, argv);
+  else if (!strcmp(argv[1], "crk"))
+    r = crk_exe(argc, argv);
+  else {
+    printf("Unknown command: %s.\n", argv[1]);
+    return help();
   }
 
-  fclose(f);
-
-  ucs4_t* raw;
-  size_t s;
-
-  if (u8_get(stdin, &raw, &s)) {
-    printf("[u8_get] fatal: %s.", strerror(errno));
+  if (r) {
+    printf("fatal: %s.\n", strerror(errno));
     return -1;
   }
-
-  ucs4_t* eucs;
-  size_t es;
-
-  if (enc(raw, s, key, N, &eucs, &es)) {
-    printf("[enc] fatal: %s.", strerror(errno));
-    free(raw);
-    return -1;
-  }
-
-  if (u8_put(stdout, eucs, es)) {
-    printf("[u8_put] fatal: %s.", strerror(errno));
-    free(raw);
-    free(eucs);
-    return -1;
-  }
-
-  free(raw);
-  free(eucs);
 
   return 0;
 }

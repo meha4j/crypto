@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <unicase.h>
 #include <unistr.h>
 
 int u8_get(FILE* f, ucs4_t** ucs, size_t* s) {
@@ -56,7 +57,12 @@ int u8_get(FILE* f, ucs4_t** ucs, size_t* s) {
   *s = 0;
 
   for (const uint8_t* iter = buf; (iter = u8_next(&ubuf[*s], iter)) != NULL;
-       *s += 1) {}
+       *s += 1) {
+    ubuf[*s] = uc_tolower(ubuf[*s]);
+
+    if (ubuf[*s] == 1105)
+      ubuf[*s] -= 1;
+  }
 
   ucs4_t* nubuf = realloc(ubuf, *s * sizeof(ucs4_t));
 
@@ -87,6 +93,9 @@ int u8_put(FILE* f, ucs4_t* ucs, size_t s) {
   size_t bs = 0;
 
   for (size_t i = 0; i < s; ++i) {
+    if (ucs[i] == 1104)
+      ucs[i] += 1;
+
     int r = u8_uctomb(buf + bs, ucs[i], 4);
 
     if (r == -1) {
