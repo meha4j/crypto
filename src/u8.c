@@ -1,4 +1,5 @@
 #include "u8.h"
+#include "key.h"
 
 #include <errno.h>
 #include <stdint.h>
@@ -12,23 +13,20 @@ int u8_get(FILE* f, ucs4_t** ucs, size_t* s) {
     return -1;
   }
 
-  size_t bs;
+  long bs;
 
   if (f == stdin)
     bs = FMAX;
   else {
     if (fseek(f, 0, SEEK_END)) {
-      errno = EIO;
       return -1;
     }
 
-    if ((bs = ftell(f)) == -1) {
-      errno = EIO;
+    if ((bs = ftell(f)) == -1L) {
       return -1;
     }
 
     if (fseek(f, 0, SEEK_SET)) {
-      errno = EIO;
       return -1;
     }
 

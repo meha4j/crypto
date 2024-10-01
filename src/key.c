@@ -98,22 +98,23 @@ int key_exe(int argc, char* argv[argc]) {
 
   if (!f) {
     errno = EIO;
-    return -1;
+    goto err;
   }
 
   uint8_t key[N];
 
-  if (key_gen(key)) {
-    fclose(f);
-    return -1;
-  }
+  if (key_gen(key))
+    goto err;
 
-  if (key_put(f, key)) {
-    fclose(f);
-    return -1;
-  }
+  if (key_put(f, key))
+    goto err;
 
   fclose(f);
-
   return 0;
+
+err:
+  if (f)
+    fclose(f);
+
+  return -1;
 }

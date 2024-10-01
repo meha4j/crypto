@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <float.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,10 +10,12 @@
 
 #include "crk.h"
 #include "key.h"
+#include "log.h"
+#include "u8.h"
 
-double seed[N];
+static double seed[N];
 
-int crk_seed(FILE* f) {
+static int crk_seed(FILE* f) {
   if (!f) {
     errno = ENOENT;
     return -1;
@@ -29,11 +32,18 @@ int crk_seed(FILE* f) {
 }
 
 static int crk_est(size_t ds, ucs4_t data[ds], double est[N]) {
-  memset(est, 0, N * sizeof(double));
+  log_debug("Zeroing...");
+  for (int i = 0; i < N; ++i)
+    est[i] = 0.0;
 
-  for (int i = 0; i < ds; ++i)
-    est[data[i] - A] += 1;
+  log_debug("Counting...");
+  for (size_t i = 0; i < ds; ++i)
+    if (data[i] >= A && data[i] < A + N) {
+      log_debug("Found: %u.", data[i]);
+      est[data[i] - A] += 1;
+    }
 
+  log_debug("Normalizing...");
   for (int i = 0; i < N; ++i)
     est[i] /= (double)ds;
 
@@ -150,39 +160,196 @@ static void pop_free(size_t ps, uint8_t* pop[ps]) {
   free(pop);
 }
 
-int crk(size_t sgen, size_t spop, size_t ds, ucs4_t data[ds]) {
+static int crk(size_t g, size_t p, int v, size_t ds, ucs4_t data[ds]) {
   double est[N];
 
-  double* fit = malloc(sizeof(double) * spop);
+  double* fit = malloc(sizeof(double) * p);
   uint8_t** pop;
 
+  log_debug("Estimating data [%d]...", ds);
   crk_est(ds, data, est);
 
-  pop = pop_new(spop);
+  pop = pop_new(p);
 
-  for (size_t i = 0; i < spop; ++i)
+  log_debug("Generating initial population [%d]...", p);
+  for (size_t i = 0; i < p; ++i)
     key_gen(pop[i]);
 
-  for (int i = 0; i < sgen; ++i) {
-    pop_fit(est, spop, pop, fit);
-    crk_slct(spop / 2, spop, fit, pop);
+  log_debug("Starting...");
+  for (size_t i = 0; i < g; ++i) {
+    log_debug("Fitting...");
+    pop_fit(est, p, pop, fit);
 
-    uint8_t** npop = pop_new(spop);
+    log_debug("Selecting [%d]...", p / 2);
+    crk_slct(p / 2, p, fit, pop);
 
-    for (int j = 0, s = 0; j < spop - 1 && s < spop; ++j)
-      for (int k = j + 1; k < spop && s < spop; ++k)
+    if (v) {
+      key_put(stdout, pop[0]);
+      putchar('\n');
+    }
+
+    uint8_t** npop = pop_new(p);
+
+    log_debug("Crossing & mutating chromosomes...");
+    for (size_t j = 0, s = 0; j < p - 1 && s < p; ++j)
+      for (size_t k = j + 1; k < p && s < p; ++k) {
         crk_cross(pop[j], pop[k], npop[s]);
+        crk_mut(npop[s]);
+      }
 
-    pop_free(spop, pop);
+    pop_free(p, pop);
     pop = npop;
   }
 
-  pop_free(spop, pop);
+  log_debug("Selecting [%d]...", 1);
+  crk_slct(1, p, fit, pop);
+  printf("Fittest one: ");
+  key_put(stdout, pop[0]);
+
+  pop_free(p, pop);
   free(fit);
 
   return 0;
 }
 
-int crk_exe(int argc, char** argv) {
+static int help() {
+  printf("Usage: crk [OPTIONS]\n\n");
+  printf("Available options:\n");
+  printf("\t-i INFILE\tFile to decode, default: stdin.\n");
+  printf("\t-o OUTFILE\tOutput file, default: stdout.\n");
+  printf("\t-g GEN\t\tNumber of generations, default: 100.\n");
+  printf("\t-p POP\t\tPopulation size, default: 100.\n");
+  printf("\t-s SEEDFILE\tSeed, default: seed.data.\n");
+  printf("\t-v\t\tVerbose.\n");
+
   return 0;
+}
+
+int crk_exe(int argc, char* argv[argc]) {
+  FILE* seed = 0;
+  FILE* in = stdin;
+  FILE* out = stdout;
+
+  size_t g = 100;
+  size_t p = 100;
+
+  int v = 0;
+
+  for (int i = 2; i < argc; ++i) {
+    if (!strcmp(argv[i], "help")) {
+      help();
+      goto end;
+    } else if (!strcmp(argv[i], "-i")) {
+      if (i + 1 == argc) {
+        errno = EINVAL;
+        goto err;
+      }
+
+      in = fopen(argv[++i], "r");
+
+      if (!in) {
+        errno = EIO;
+        goto err;
+      }
+    } else if (!strcmp(argv[i], "-o")) {
+      if (i + 1 == argc) {
+        errno = EINVAL;
+        goto err;
+      }
+
+      out = fopen(argv[++i], "w+");
+
+      if (!out) {
+        errno = EIO;
+        goto err;
+      }
+    } else if (!strcmp(argv[i], "-g")) {
+      if (i + 1 == argc) {
+        errno = EINVAL;
+        goto err;
+      }
+
+      g = strtoul(argv[++i], NULL, 10);
+
+      if (g == 0 || g == ULLONG_MAX) {
+        errno = EINVAL;
+        goto err;
+      }
+    } else if (!strcmp(argv[i], "-p")) {
+      if (i + 1 == argc) {
+        errno = EINVAL;
+        goto err;
+      }
+
+      p = strtoul(argv[++i], NULL, 10);
+
+      if (g == 0 || g == ULLONG_MAX) {
+        errno = EINVAL;
+        goto err;
+      }
+    } else if (!strcmp(argv[i], "-s")) {
+      if (i + 1 == argc) {
+        errno = EINVAL;
+        goto err;
+      }
+
+      seed = fopen(argv[++i], "r");
+
+      if (!seed) {
+        errno = EIO;
+        goto err;
+      }
+    } else if (!strcmp(argv[i], "-v")) {
+      v = 1;
+    } else {
+      errno = EINVAL;
+      goto err;
+    }
+  }
+
+  if (!seed) {
+    seed = fopen("seed.data", "r");
+
+    if (!seed) {
+      errno = EIO;
+      goto err;
+    }
+  }
+
+  crk_seed(seed);
+
+  ucs4_t* data;
+  size_t ds;
+
+  if (u8_get(in, &data, &ds)) {
+    goto err;
+  }
+
+  if (crk(g, p, v, ds, data)) {
+    goto err;
+  }
+
+end:
+  if (seed)
+    fclose(seed);
+
+  if (in && in != stdin)
+    fclose(in);
+
+  if (out && out != stdout)
+    fclose(out);
+
+  return 0;
+
+err:
+  if (seed)
+    fclose(seed);
+
+  if (in && in != stdin)
+    fclose(in);
+
+  if (out && out != stdout)
+    fclose(out);
+
+  return -1;
 }

@@ -50,12 +50,12 @@ int main(int argc, char* argv[]) {
   else if (!strcmp(argv[1], "crk"))
     r = crk_exe(argc, argv);
   else {
-    printf("Unknown command: %s.\n", argv[1]);
-    return help();
+    errno = ENOTSUP;
+    r = -1;
   }
 
   if (r) {
-    printf("fatal: %s.\n", strerror(errno));
+    printf("error: %s. (try: burro [COMMAND] help)\n", strerror(errno));
     return -1;
   }
 
