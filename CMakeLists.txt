@@ -25,5 +25,5 @@ add_executable(burro ${SRC})
 
 target_link_libraries(burro unistring)
 target_compile_options(burro PRIVATE -std=c23)
-target_compile_options(burro PRIVATE -Wall -Wextra -Wpedantic -Werror -std=c23)
+# target_compile_options(burro PRIVATE -Wall -Wextra -Wpedantic -Werror)
 

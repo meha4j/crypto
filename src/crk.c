@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/random.h>
+#include <unistr.h>
 #include <unitypes.h>
 
 #include "crk.h"
@@ -32,20 +33,24 @@ static int crk_seed(FILE* f) {
 }
 
 static int crk_est(size_t ds, ucs4_t data[ds], double est[N]) {
-  log_debug("Zeroing...");
   for (int i = 0; i < N; ++i)
     est[i] = 0.0;
 
-  log_debug("Counting...");
   for (size_t i = 0; i < ds; ++i)
-    if (data[i] >= A && data[i] < A + N) {
-      log_debug("Found: %u.", data[i]);
+    if (data[i] >= A && data[i] < A + N)
       est[data[i] - A] += 1;
-    }
 
-  log_debug("Normalizing...");
-  for (int i = 0; i < N; ++i)
+  log_debug("Estimation: ");
+
+  char buf[5];
+  int s;
+
+  for (int i = 0; i < N; ++i) {
     est[i] /= (double)ds;
+    s = u8_uctomb((uint8_t*)buf, est[i], 4);
+    buf[s] = '\n';
+    printf("%s\t%lf\n", buf, est[i] * 100);
+  }
 
   return 0;
 }
@@ -80,7 +85,7 @@ static int crk_mut(uint8_t key[N]) {
 }
 
 static int crk_cross(uint8_t a[N], uint8_t b[N], uint8_t c[N]) {
-  uint8_t f = 0;
+  uint64_t f = 0;
   uint8_t rnd[N];
 
   if (getrandom(rnd, N, 0) == -1) {
@@ -89,14 +94,14 @@ static int crk_cross(uint8_t a[N], uint8_t b[N], uint8_t c[N]) {
   }
 
   for (int i = 0; i < N; ++i) {
-    if (f & (1 << (N - 1 - a[i])))
+    if (f & (1 << a[i]))
       c[i] = b[i];
-    else if (f & (1 << (N - 1 - b[i])))
+    else if (f & (1 << b[i]))
       c[i] = a[i];
     else
       c[i] = rnd[i] % 2 == 0 ? a[i] : b[i];
 
-    f |= (1 << (N - 1 - c[i]));
+    f = f | (1 << c[i]);
   }
 
   return 0;
@@ -183,6 +188,8 @@ static int crk(size_t g, size_t p, int v, size_t ds, ucs4_t data[ds]) {
     log_debug("Selecting [%d]...", p / 2);
     crk_slct(p / 2, p, fit, pop);
 
+    log_debug("Best fit: %lf.", fit[0]);
+
     if (v) {
       key_put(stdout, pop[0]);
       putchar('\n');
@@ -195,6 +202,8 @@ static int crk(size_t g, size_t p, int v, size_t ds, ucs4_t data[ds]) {
       for (size_t k = j + 1; k < p && s < p; ++k) {
         crk_cross(pop[j], pop[k], npop[s]);
         crk_mut(npop[s]);
+
+        s += 1;
       }
 
     pop_free(p, pop);
