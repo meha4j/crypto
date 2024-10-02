@@ -1,33 +1,17 @@
-// burro key KEYFILE
-
-// burro enc KEYFILE
-//  OPTIONS:
-//    -in     Input file, default: stdin.
-//    -out    Output file, default: stdout.
-
-// burro dec [OPTIONS] KEYFILE
-//  OPTIONS:
-//    -in     Input file, default: stdin.
-//    -out    Output file, default: stdout.
-
-// burro crk [OPTIONS]
-//  OPTIONS:
-//    -v      Verbose.
-//    -in     Input file, default: stdin.
-//    -out    Output file, default: stdout.
-
 #include <errno.h>
+#include <stdio.h>
 #include <string.h>
 
-#include "crk.h"
-#include "enc.h"
-#include "key.h"
+int key_exe(int argc, char** argv);
+int enc_exe(int argc, char** argv);
+int dec_exe(int argc, char** argv);
+int crk_exe(int argc, char** argv);
 
 int help() {
   printf("Usage: burro COMMAND\n\n");
   printf("COMMAND\tCommand to execute.\n\n");
   printf("Available commands:\n");
-  printf("\tkey\tKey management.\n");
+  printf("\tkey\tKey generation.\n");
   printf("\tenc\tEncode text using private key.\n");
   printf("\tdec\tDecode text using private key.\n");
   printf("\tcrk\tDecode text without private key.\n");
