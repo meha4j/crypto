@@ -11,6 +11,6 @@ struct chr {
 };
 
 int ga_seed(FILE* f);
-int ga_evo(size_t gc, size_t ps, size_t ds, ucs4_t data[ds], struct chr* chr);
+int ga_evo(size_t gc, size_t ps, int v, size_t ds, ucs4_t data[ds], struct chr* chr);
 
 #endif  // GA_H

@@ -202,7 +202,7 @@ static int exe(int argc, char* argv[argc], int inv) {
       key k;
       int bs;
 
-      if (u8_get(f, N, buf) != N)
+      if (u8_get(f, N, buf) < N)
         goto err;
 
       if (key_fruc(k, buf, inv))

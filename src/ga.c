@@ -8,7 +8,7 @@
 #include <string.h>
 #include <sys/random.h>
 
-#define SS 1000
+#define SS 10000
 
 static double seed[N];
 
@@ -43,7 +43,7 @@ static inline void swap(double* fit, uint8_t** pop, size_t a, size_t b) {
 }
 
 static int est(size_t ds, ucs4_t data[ds], double e[N]) {
-  memset(est, 0, sizeof(double) * N);
+  memset(e, 0, sizeof(double) * N);
 
   for (size_t i = 0; i < ds; ++i)
     if (A <= data[i] && data[i] < A + N)
@@ -94,30 +94,30 @@ static int rw_select(size_t ps, struct chr* pop, size_t ss, size_t sct[ss]) {
   return 0;
 }
 
-static int cross(struct chr* a, struct chr* b, struct chr* c) {
-  uint64_t f = 0;
-  uint8_t rnd[N];
+static int ord_cross(struct chr* a, struct chr* b, struct chr* c) {
+  uint8_t rnd[4];
 
-  if (getrandom(rnd, N, 0) == -1) {
+  if (getrandom(rnd, 4, 0) == -1) {
     errno = EIO;
     return -1;
   }
 
-  for (int i = 0; i < N; ++i) {
-    if (f & (1 << a->k[i]))
-      c->k[i] = b->k[i];
-    else if (f & (1 << b->k[i]))
-      c->k[i] = a->k[i];
-    else
-      c->k[i] = rnd[i] % 2 == 0 ? a->k[i] : b->k[i];
+  int p = 0;
 
-    f = f | (1 << c->k[i]);
+  for (int i = 0; i < 4; ++i) {
+    p = rnd[i] % (N - p) + p;
+
+    if (p == N)
+      break;
+
+    for (int j = p; j < 4 && j < N; ++j)
+      c->k[j] = a->k[j];
   }
 
   return 0;
 }
 
-static int mut(struct chr c) {
+static int mut(struct chr* c) {
   uint8_t rnd[2];
 
   if (getrandom(rnd, 2, 0) == -1) {
@@ -128,15 +128,17 @@ static int mut(struct chr c) {
   rnd[0] = rnd[0] % N;
   rnd[1] = rnd[1] % N;
 
-  uint8_t tmp = c.k[rnd[0]];
-  c.k[rnd[0]] = c.k[rnd[1]];
-  c.k[rnd[1]] = tmp;
+  uint8_t tmp = c->k[rnd[0]];
+  c->k[rnd[0]] = c->k[rnd[1]];
+  c->k[rnd[1]] = tmp;
 
   return 0;
 }
 
-int ga_evo(size_t gc, size_t ps, size_t ds, ucs4_t data[ds], struct chr* chr) {
+int ga_evo(size_t gc, size_t ps, int v, size_t ds, ucs4_t data[ds],
+           struct chr* chr) {
   double e[N];
+  ucs4_t b[N];
 
   est(ds, data, e);
 
@@ -149,6 +151,11 @@ int ga_evo(size_t gc, size_t ps, size_t ds, ucs4_t data[ds], struct chr* chr) {
     fit(e, &pop[i]);
   }
 
+  chr->f = pop[0].f;
+
+  for (int i = 0; i < N; ++i)
+    chr->k[i] = pop[0].k[i];
+
   for (size_t i = 0; i < gc; ++i) {
     rw_select(ps, pop, SS, sct);
 
@@ -159,25 +166,49 @@ int ga_evo(size_t gc, size_t ps, size_t ds, ucs4_t data[ds], struct chr* chr) {
 
     struct chr* npop = malloc(sizeof(struct chr) * ps);
 
-    for (size_t i = 0; i < ps; ++i) {
-      cross(&pop[sct[rnd[i * 2]]], &pop[sct[rnd[i * 2 + 1]]], &npop[i]);
-      fit(e, &npop[i]);
+    for (size_t j = 0; j < ps; ++j) {
+      size_t f = sct[rnd[j * 2] % SS];
+      size_t s = sct[rnd[j * 2 + 1] % SS];
+
+      if (v) {
+        key_touc(pop[f].k, b);
+        u8_put(stdout, N, b);
+        putchar('\n');
+      }
+
+      if (v) {
+        key_touc(pop[s].k, b);
+        u8_put(stdout, N, b);
+        putchar('\n');
+      }
+
+      ord_cross(&pop[f], &pop[s], &npop[j]);
+
+      if (v) {
+        key_touc(npop[j].k, b);
+        u8_put(stdout, N, b);
+        putchar('\n');
+      }
+
+      putchar('\n');
+
+      if (j == 10)
+        return 0;
+
+      mut(&npop[j]);
+      fit(e, &npop[j]);
+
+      if (npop[j].f < chr->f) {
+        chr->f = npop[i].f;
+
+        for (int k = 0; k < N; ++k)
+          chr->k[k] = npop[j].k[k];
+      }
     }
 
     free(pop);
     pop = npop;
   }
-
-  struct chr* best = &pop[0];
-
-  for (size_t i = 1; i < ps; ++i)
-    if (pop[i].f < best->f)
-      best = &pop[i];
-
-  for (size_t i = 0; i < N; ++i)
-    chr->k[i] = best->k[i];
-
-  chr->f = best->f;
 
   free(pop);
   free(sct);
@@ -302,7 +333,7 @@ int crk_exe(int argc, char* argv[argc]) {
 
   struct chr c;
 
-  if (ga_evo(g, p, ds, data, &c))
+  if (ga_evo(g, p, v, ds, data, &c))
     goto err;
 
   if (key_touc(c.k, data))
