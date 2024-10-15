@@ -15,7 +15,7 @@ static inline void swap(uint8_t* a, uint8_t* b) {
   *b = tmp;
 }
 
-int kgen(uint8_t* k) {
+int rot_kgen(uint8_t* k) {
   for (int i = 0; i < KS; ++i)
     k[i] = i;
 
@@ -39,7 +39,7 @@ int kgen(uint8_t* k) {
   return 0;
 }
 
-int kinv(uint8_t* k) {
+int rot_kinv(uint8_t* k) {
   uint8_t kr[KS];
 
   for (int i = 0; i < KS; ++i)
@@ -50,7 +50,7 @@ int kinv(uint8_t* k) {
   return 0;
 }
 
-int k2uc(uint8_t* k, ucs4_t* uc) {
+int rot_k2uc(uint8_t* k, ucs4_t* uc) {
   for (int i = 0; i < KS; ++i) {
     int j = i;
 
@@ -65,7 +65,7 @@ int k2uc(uint8_t* k, ucs4_t* uc) {
   return 0;
 }
 
-int uc2k(uint8_t* k, ucs4_t* uc) {
+int rot_uc2k(uint8_t* k, ucs4_t* uc) {
   uint64_t f = 0;
 
   for (int i = 0; i < KS; ++i) {
@@ -98,7 +98,7 @@ int uc2k(uint8_t* k, ucs4_t* uc) {
 long rot(uint32_t ds, ucs4_t data[ds], uint8_t* k) {
   long s = 0;
 
-  for (int i = 0; i < ds; ++i)
+  for (uint32_t i = 0; i < ds; ++i)
     if (data[i] >= A && data[i] < A + KS)
       data[s++] = A + k[data[i] - A];
 

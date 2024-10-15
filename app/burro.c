@@ -28,12 +28,12 @@ static int key_exe(int argc, char* argv[argc]) {
   ucs4_t data[KS];
   uint8_t k[KS];
 
-  if (kgen(k)) {
+  if (rot_kgen(k)) {
     fclose(f);
     return -1;
   }
 
-  if (k2uc(k, data)) {
+  if (rot_k2uc(k, data)) {
     fclose(f);
     return -1;
   }
@@ -117,10 +117,10 @@ static int rot_exe(int argc, char* argv[argc]) {
       if (u8_get(kf, KS, buf) < KS)
         goto err;
 
-      if (uc2k(k, buf))
+      if (rot_uc2k(k, buf))
         goto err;
 
-      if (inv && kinv(k))
+      if (inv && rot_kinv(k))
         goto err;
 
       if ((bs = u8_get(in, 0, buf)) == -1)
@@ -258,7 +258,7 @@ static int fit_exe(int argc, char* argv[argc]) {
   if (!sf)
     goto err;
 
-  if (init(sf))
+  if (fit_init(sf))
     goto err;
 
   buf = malloc(sizeof(ucs4_t) * FMAX / 4);
@@ -286,12 +286,12 @@ static int fit_exe(int argc, char* argv[argc]) {
     goto err;
   }
 
-  if (kinv(r.kr)) {
+  if (rot_kinv(r.kr)) {
     free(r.kr);
     goto err;
   }
 
-  if (k2uc(r.kr, buf)) {
+  if (rot_k2uc(r.kr, buf)) {
     free(r.kr);
     goto err;
   }

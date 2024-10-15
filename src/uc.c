@@ -83,7 +83,7 @@ long u8_put(FILE* f, uint32_t n, ucs4_t* buf) {
     return 0;
 
   uint8_t* buff = malloc(n * 4);
-  long s = 0;
+  uint64_t s = 0;
 
   for (size_t i = 0; i < n; ++i) {
     if (buf[i] == 1104)

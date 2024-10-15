@@ -4,14 +4,13 @@
 
 #include <errno.h>
 #include <limits.h>
-#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/random.h>
 
 static double seed[KS][KS];
 
-int init(FILE* f) {
+int fit_init(FILE* f) {
   if (!f) {
     errno = EINVAL;
     return -1;
@@ -128,7 +127,7 @@ static int mut(struct chromo* chr) {
   return 0;
 }
 
-static int est(double tg[KS][KS], size_t ds, ucs4_t* data) {
+static int est(double tg[KS][KS], size_t ds, ucs4_t data[ds]) {
   if (ds < 2)
     return -1;
 
@@ -189,7 +188,7 @@ void pfree(size_t ps, struct chromo* pop) {
   free(pop);
 }
 
-int fit(size_t gc, size_t ts, size_t ps, size_t ds, ucs4_t* data,
+int fit(size_t gc, size_t ts, size_t ps, size_t ds, ucs4_t data[ds],
         struct chromo* bc) {
   double tg[KS][KS];
 
@@ -202,7 +201,7 @@ int fit(size_t gc, size_t ts, size_t ps, size_t ds, ucs4_t* data,
     return -1;
 
   for (size_t i = 0; i < ps; ++i) {
-    if (kgen(cpop[i].kr)) {
+    if (rot_kgen(cpop[i].kr)) {
       pfree(ps, cpop);
       return -1;
     }

@@ -9,7 +9,7 @@ struct chromo {
   double n;
 };
 
-int init(FILE* f);
+int fit_init(FILE* f);
 int fit(size_t gc, size_t ts, size_t ps, size_t ds, ucs4_t data[ds],
         struct chromo* bc);
 
