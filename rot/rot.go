@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -11,20 +12,28 @@ type PrivateKey map[rune]rune
 
 type PublicKey map[rune]rune
 
-type Encoder struct {
-	Src io.RuneReader
-	Key *PrivateKey
+type Encrypter struct {
+	src io.RuneReader
+	key *PrivateKey
 }
 
-type Decoder struct {
-	Src io.RuneReader
-	Key *PublicKey
+type Decrypter struct {
+	src io.RuneReader
+	key *PublicKey
 }
 
-func GenerateKey(random io.Reader) (*PrivateKey, error) {
+func NewEncrypter(src io.RuneReader, key *PrivateKey) Encrypter {
+	return Encrypter{src, key}
+}
+
+func NewDecrypter(src io.RuneReader, key *PublicKey) Decrypter {
+	return Decrypter{src, key}
+}
+
+func GenerateKey(rand io.Reader) (*PrivateKey, error) {
 	var rnd [33]byte
 
-	_, err := random.Read(rnd[:])
+	_, err := rand.Read(rnd[:])
 
 	if err != nil {
 		return nil, err
@@ -111,7 +120,7 @@ func (key *PrivateKey) Public() *PublicKey {
 	return &pkey
 }
 
-func (self Encoder) Read(b []byte) (s int, err error) {
+func (self *Encrypter) Read(b []byte) (s int, err error) {
 	for {
 		r, _, err := self.ReadRune()
 
@@ -130,15 +139,16 @@ func (self Encoder) Read(b []byte) (s int, err error) {
 	}
 }
 
-func (self Encoder) ReadRune() (rune, int, error) {
+func (self *Encrypter) ReadRune() (rune, int, error) {
 	for {
-		r, _, err := self.Src.ReadRune()
+		r, _, err := self.src.ReadRune()
 
 		if err != nil {
 			return utf8.RuneError, 0, err
 		}
 
-		r, ok := (*self.Key)[r]
+    r = unicode.ToLower(r)
+		r, ok := (*self.key)[r]
 
 		if !ok {
 			continue
@@ -148,7 +158,7 @@ func (self Encoder) ReadRune() (rune, int, error) {
 	}
 }
 
-func (self Decoder) Read(b []byte) (s int, err error) {
+func (self *Decrypter) Read(b []byte) (s int, err error) {
 	for {
 		r, _, err := self.ReadRune()
 
@@ -167,15 +177,15 @@ func (self Decoder) Read(b []byte) (s int, err error) {
 	}
 }
 
-func (self Decoder) ReadRune() (rune, int, error) {
+func (self *Decrypter) ReadRune() (rune, int, error) {
 	for {
-		r, _, err := self.Src.ReadRune()
+		r, _, err := self.src.ReadRune()
 
 		if err != nil {
 			return utf8.RuneError, 0, err
 		}
 
-		r, ok := (*self.Key)[r]
+		r, ok := (*self.key)[r]
 
 		if !ok {
 			continue
